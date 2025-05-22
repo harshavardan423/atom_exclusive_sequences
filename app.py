@@ -41,6 +41,73 @@ EXCLUSIVE_SEQUENCES_DATA = {
             }
         ]
     },
+
+    {
+    "Google Sheets Downloader": {
+        "description": "Automated sequence to download Google Sheets as CSV/Excel files with authentication, error handling, and user notifications",
+        "category": "data",
+        "steps_count": 6,
+        "steps": [
+            {
+                "type": "triggers",
+                "name": "schedule_trigger",
+                "details": {
+                    "frequency": "daily",
+                    "time": "09:00"
+                },
+                "output": "trigger_timestamp"
+            },
+            {
+                "type": "actions",
+                "name": "run_py_code",
+                "details": {
+                    "code": "import os\nimport pandas as pd\nfrom datetime import datetime\nimport requests\nfrom urllib.parse import urlparse\n\n# Configuration\nSHEET_URL = 'https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/edit#gid=0'  # Replace with actual sheet URL\nOUTPUT_DIR = './downloads/sheets/'\nFILE_FORMAT = 'csv'  # Options: csv, xlsx\n\n# Create output directory\nos.makedirs(OUTPUT_DIR, exist_ok=True)\n\n# Extract sheet ID from URL\ndef extract_sheet_id(url):\n    if '/spreadsheets/d/' in url:\n        return url.split('/spreadsheets/d/')[1].split('/')[0]\n    return None\n\nsheet_id = extract_sheet_id(SHEET_URL)\nif not sheet_id:\n    raise ValueError('Invalid Google Sheets URL')\n\n# Generate download URL\nif FILE_FORMAT == 'csv':\n    download_url = f'https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv'\nelse:\n    download_url = f'https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=xlsx'\n\nprint(f'Sheet ID: {sheet_id}')\nprint(f'Download URL: {download_url}')\n\ndownload_info = {\n    'sheet_id': sheet_id,\n    'download_url': download_url,\n    'format': FILE_FORMAT,\n    'output_dir': OUTPUT_DIR,\n    'timestamp': datetime.now().isoformat()\n}"
+                },
+                "output": "download_config"
+            },
+            {
+                "type": "actions",
+                "name": "run_py_code",
+                "details": {
+                    "code": "import requests\nimport os\nfrom datetime import datetime\n\n# Get config from previous step\ndownload_url = download_info['download_url']\noutput_dir = download_info['output_dir']\nfile_format = download_info['format']\nsheet_id = download_info['sheet_id']\n\ntry:\n    # Make request to download the sheet\n    headers = {\n        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'\n    }\n    \n    response = requests.get(download_url, headers=headers, timeout=30)\n    response.raise_for_status()\n    \n    # Generate filename with timestamp\n    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')\n    filename = f'google_sheet_{sheet_id}_{timestamp}.{file_format}'\n    file_path = os.path.join(output_dir, filename)\n    \n    # Save the file\n    with open(file_path, 'wb') as f:\n        f.write(response.content)\n    \n    # Verify file was created and get size\n    file_size = os.path.getsize(file_path)\n    \n    download_result = {\n        'success': True,\n        'file_path': file_path,\n        'filename': filename,\n        'file_size_bytes': file_size,\n        'file_size_mb': round(file_size / (1024*1024), 2),\n        'download_time': datetime.now().isoformat(),\n        'status_code': response.status_code\n    }\n    \n    print(f'Successfully downloaded: {filename}')\n    print(f'File size: {download_result[\"file_size_mb\"]} MB')\n    print(f'Saved to: {file_path}')\n    \nexcept requests.exceptions.RequestException as e:\n    download_result = {\n        'success': False,\n        'error': f'Download failed: {str(e)}',\n        'error_type': 'network_error'\n    }\nexcept Exception as e:\n    download_result = {\n        'success': False,\n        'error': f'Unexpected error: {str(e)}',\n        'error_type': 'general_error'\n    }"
+                },
+                "output": "download_status"
+            },
+            {
+                "type": "actions",
+                "name": "run_py_code",
+                "details": {
+                    "code": "import pandas as pd\nimport json\n\n# Validate and analyze downloaded file if successful\nif download_status['success']:\n    try:\n        file_path = download_status['file_path']\n        \n        # Read and analyze the file\n        if file_path.endswith('.csv'):\n            df = pd.read_csv(file_path)\n        else:\n            df = pd.read_excel(file_path)\n        \n        # Generate file analysis\n        analysis = {\n            'rows': len(df),\n            'columns': len(df.columns),\n            'column_names': list(df.columns),\n            'data_types': df.dtypes.to_dict(),\n            'memory_usage_mb': round(df.memory_usage(deep=True).sum() / (1024*1024), 2),\n            'has_null_values': df.isnull().any().any(),\n            'null_counts': df.isnull().sum().to_dict()\n        }\n        \n        # Add sample data preview (first 3 rows)\n        analysis['sample_data'] = df.head(3).to_dict('records')\n        \n        validation_result = {\n            'file_valid': True,\n            'analysis': analysis\n        }\n        \n        print(f'File validation successful!')\n        print(f'Rows: {analysis[\"rows\"]}, Columns: {analysis[\"columns\"]}')\n        print(f'Columns: {\", \".join(analysis[\"column_names\"][:5])}{\", ...\" if len(analysis[\"column_names\"]) > 5 else \"\"}')\n        \n    except Exception as e:\n        validation_result = {\n            'file_valid': False,\n            'error': f'File validation failed: {str(e)}'\n        }\nelse:\n    validation_result = {\n        'file_valid': False,\n        'error': 'Download failed, cannot validate file'\n    }"
+                },
+                "output": "file_validation"
+            },
+            {
+                "type": "actions",
+                "name": "generate_report",
+                "details": {
+                    "data": {
+                        "download_config": "{{ACTION_OUTPUT:download_config}}",
+                        "download_status": "{{ACTION_OUTPUT:download_status}}",
+                        "file_validation": "{{ACTION_OUTPUT:file_validation}}",
+                        "report_generated": "{{ACTION_OUTPUT:trigger_timestamp}}"
+                    },
+                    "format": "json"
+                },
+                "output": "download_report"
+            },
+            {
+                "type": "actions",
+                "name": "notify_user",
+                "details": {
+                    "user": "admin",
+                    "message": "Google Sheets download completed. Status: {{ACTION_OUTPUT:download_status.success}}. File: {{ACTION_OUTPUT:download_status.filename}}. Report available at: {{ACTION_OUTPUT:download_report}}",
+                    "method": "email"
+                },
+                "output": "notification_sent"
+            }
+        ]
+    }
+},
     "AI Enhanced Pipeline": {
         "description": "AI-powered data processing",
         "category": "ai",
