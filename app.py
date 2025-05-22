@@ -652,6 +652,58 @@ def health_check():
         "total_sequences": len(EXCLUSIVE_SEQUENCES_DATA)
     }), 200
 
+@app.route('/api/exclusive-sequences/search', methods=['GET'])
+def search_exclusive_sequences():
+    """Search exclusive sequences by name, description, category, or steps"""
+    try:
+        query = request.args.get('q', '').strip().lower()
+        
+        if not query:
+            return jsonify({"error": "Query parameter 'q' is required"}), 400
+        
+        results = {}
+        
+        for name, data in EXCLUSIVE_SEQUENCES_DATA.items():
+            # Search in name, description, category
+            name_match = query in name.lower()
+            desc_match = query in data["description"].lower()
+            category_match = query in data["category"].lower()
+            
+            # Also search in step names and details
+            steps_match = False
+            for step in data["steps"]:
+                if (query in step.get("name", "").lower() or 
+                    query in str(step.get("details", {})).lower()):
+                    steps_match = True
+                    break
+            
+            if name_match or desc_match or category_match or steps_match:
+                results[name] = {
+                    "description": data["description"],
+                    "category": data["category"],
+                    "steps_count": data["steps_count"],
+                    "match_type": []
+                }
+                
+                # Indicate what matched for better UX
+                if name_match:
+                    results[name]["match_type"].append("name")
+                if desc_match:
+                    results[name]["match_type"].append("description")
+                if category_match:
+                    results[name]["match_type"].append("category")
+                if steps_match:
+                    results[name]["match_type"].append("steps")
+        
+        return jsonify({
+            "query": query,
+            "results": results,
+            "total_found": len(results)
+        }), 200
+        
+    except Exception as e:
+        return jsonify({"error": f"Failed to search exclusive sequences: {str(e)}"}), 500
+
 @app.route('/api/exclusive-sequences', methods=['GET'])
 def list_exclusive_sequences():
     """Get all available exclusive sequences"""
