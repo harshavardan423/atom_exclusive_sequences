@@ -41,8 +41,7 @@ EXCLUSIVE_SEQUENCES_DATA = {
             }
         ]
     },
-
-    {
+    
     "Google Sheets Downloader": {
         "description": "Automated sequence to download Google Sheets as CSV/Excel files with authentication, error handling, and user notifications",
         "category": "data",
@@ -106,8 +105,7 @@ EXCLUSIVE_SEQUENCES_DATA = {
                 "output": "notification_sent"
             }
         ]
-    }
-},
+    },
     "AI Enhanced Pipeline": {
         "description": "AI-powered data processing",
         "category": "ai",
