@@ -704,7 +704,579 @@ EXCLUSIVE_SEQUENCES_DATA = {
                 "output": ""
             }
         ]
-    }
+    },
+    "Email to Task Manager": {
+    "description": "Automatically creates tasks from emails with specific keywords and sends notifications",
+    "category": "productivity",
+    "steps_count": 7,
+    "steps": [
+        {
+            "type": "triggers",
+            "name": "schedule_trigger",
+            "details": {
+                "frequency": "every_15_minutes",
+                "time": "00:00"
+            },
+            "output": "email_check_trigger"
+        },
+        {
+            "type": "actions",
+            "name": "run_py_code",
+            "details": {
+                "code": "import imaplib\nimport email\nimport json\nfrom datetime import datetime, timedelta\n\n# Email configuration (placeholder - would need actual credentials)\nemail_config = {\n    'server': 'imap.gmail.com',\n    'username': 'your_email@gmail.com',\n    'keywords': ['TODO', 'TASK', 'URGENT', 'ACTION REQUIRED']\n}\n\n# Simulate email checking (in real implementation, would connect to actual email)\nfound_emails = [\n    {\n        'subject': 'TODO: Review quarterly reports',\n        'sender': 'manager@company.com',\n        'body': 'Please review the Q4 reports by Friday',\n        'received': datetime.now().isoformat(),\n        'priority': 'high'\n    },\n    {\n        'subject': 'URGENT: Client meeting preparation',\n        'sender': 'client@example.com', \n        'body': 'Need presentation ready for Monday meeting',\n        'received': datetime.now().isoformat(),\n        'priority': 'urgent'\n    }\n]\n\nprint(json.dumps(found_emails))"
+            },
+            "output": "task_emails"
+        },
+        {
+            "type": "actions",
+            "name": "think",
+            "details": {
+                "text_input": "Process these emails and extract actionable tasks: {{ACTION_OUTPUT:task_emails}}. For each email, create a structured task with title, description, priority, due date, and assignee information.",
+                "read_file_flag": "false",
+                "file_path": ""
+            },
+            "output": "processed_tasks"
+        },
+        {
+            "type": "actions",
+            "name": "modify_file",
+            "details": {
+                "file_path": "/tasks/task_list.json",
+                "task": "append {{ACTION_OUTPUT:processed_tasks}}"
+            },
+            "output": "tasks_saved"
+        },
+        {
+            "type": "actions",
+            "name": "make_api_request",
+            "details": {
+                "url": "https://api.slack.com/api/chat.postMessage",
+                "method": "POST",
+                "headers": {"Authorization": "Bearer slack_token_here", "Content-Type": "application/json"},
+                "body": "{\"channel\": \"#tasks\", \"text\": \"New tasks created from emails: {{ACTION_OUTPUT:processed_tasks}}\"}"
+            },
+            "output": "slack_notification"
+        },
+        {
+            "type": "actions",
+            "name": "notify_user",
+            "details": {
+                "user": "task_manager",
+                "message": "Created {{ACTION_OUTPUT:task_emails.length}} new tasks from emails. Check task list for details.",
+                "method": "email"
+            },
+            "output": "user_notified"
+        }
+    ]
+},
+
+"Form Submission to CRM Pipeline": {
+    "description": "Processes form submissions, adds to CRM, sends welcome emails, and creates follow-up tasks",
+    "category": "marketing",
+    "steps_count": 9,
+    "steps": [
+        {
+            "type": "triggers",
+            "name": "file_created_trigger",
+            "details": {
+                "file_path": "/forms/submissions/"
+            },
+            "output": "new_submission"
+        },
+        {
+            "type": "actions",
+            "name": "think",
+            "details": {
+                "text_input": "Process this form submission data and extract contact information, interests, and lead scoring details.",
+                "read_file_flag": "true",
+                "file_path": "{{ACTION_OUTPUT:new_submission}}"
+            },
+            "output": "lead_data"
+        },
+        {
+            "type": "actions",
+            "name": "run_py_code",
+            "details": {
+                "code": "import json\nimport hashlib\nfrom datetime import datetime\n\n# Process lead data and create CRM record\nlead_info = {\n    'id': hashlib.md5(str(datetime.now()).encode()).hexdigest()[:8],\n    'source': 'website_form',\n    'timestamp': datetime.now().isoformat(),\n    'status': 'new_lead',\n    'score': 75,  # Default scoring\n    'next_action': 'send_welcome_email'\n}\n\nprint(json.dumps(lead_info))"
+            },
+            "output": "crm_record"
+        },
+        {
+            "type": "actions",
+            "name": "make_api_request",
+            "details": {
+                "url": "https://api.hubspot.com/crm/v3/objects/contacts",
+                "method": "POST", 
+                "headers": {"Authorization": "Bearer hubspot_token", "Content-Type": "application/json"},
+                "body": "{\"properties\": {{ACTION_OUTPUT:lead_data}}}"
+            },
+            "output": "crm_response"
+        },
+        {
+            "type": "actions",
+            "name": "think",
+            "details": {
+                "text_input": "Create a personalized welcome email based on this lead data: {{ACTION_OUTPUT:lead_data}}. Make it engaging and relevant to their interests.",
+                "read_file_flag": "false",
+                "file_path": ""
+            },
+            "output": "welcome_email"
+        },
+        {
+            "type": "actions",
+            "name": "make_api_request",
+            "details": {
+                "url": "https://api.sendgrid.com/v3/mail/send",
+                "method": "POST",
+                "headers": {"Authorization": "Bearer sendgrid_api_key", "Content-Type": "application/json"},
+                "body": "{\"personalizations\": [{\"to\": [{{ACTION_OUTPUT:lead_data.email}}]}], \"from\": {\"email\": \"welcome@company.com\"}, \"subject\": \"Welcome!\", \"content\": [{\"type\": \"text/html\", \"value\": \"{{ACTION_OUTPUT:welcome_email}}\"}]}"
+            },
+            "output": "email_sent"
+        },
+        {
+            "type": "actions",
+            "name": "modify_file",
+            "details": {
+                "file_path": "/crm/follow_up_tasks.json",
+                "task": "append {\"lead_id\": \"{{ACTION_OUTPUT:crm_record.id}}\", \"task\": \"Follow up in 3 days\", \"due_date\": \"{{ACTION_OUTPUT:crm_record.timestamp}}\", \"priority\": \"medium\"}"
+            },
+            "output": "follow_up_created"
+        },
+        {
+            "type": "actions",
+            "name": "notify_user",
+            "details": {
+                "user": "sales_team",
+                "message": "New lead processed: {{ACTION_OUTPUT:lead_data.name}}. CRM updated, welcome email sent, follow-up scheduled.",
+                "method": "slack"
+            },
+            "output": "team_notified"
+        }
+    ]
+},
+
+"Social Media Monitor & Response": {
+    "description": "Monitors social media mentions, analyzes sentiment, and creates response drafts",
+    "category": "marketing",
+    "steps_count": 8,
+    "steps": [
+        {
+            "type": "triggers",
+            "name": "schedule_trigger", 
+            "details": {
+                "frequency": "every_30_minutes",
+                "time": "00:00"
+            },
+            "output": "social_check_trigger"
+        },
+        {
+            "type": "actions",
+            "name": "super_search_plus",
+            "details": {
+                "query": "site:twitter.com OR site:facebook.com OR site:linkedin.com \"YourBrandName\" OR \"@YourHandle\"",
+                "niche": "social_media"
+            },
+            "output": "social_mentions"
+        },
+        {
+            "type": "actions",
+            "name": "think",
+            "details": {
+                "text_input": "Analyze these social media mentions for sentiment, urgency, and response requirements: {{ACTION_OUTPUT:social_mentions}}. Categorize as positive, negative, neutral, or urgent.",
+                "read_file_flag": "false",
+                "file_path": ""
+            },
+            "output": "sentiment_analysis"
+        },
+        {
+            "type": "actions",
+            "name": "run_py_code",
+            "details": {
+                "code": "import json\nfrom datetime import datetime\n\n# Process sentiment analysis and create response priorities\nresponse_queue = []\nfor mention in {{ACTION_OUTPUT:sentiment_analysis}}:\n    if mention.get('sentiment') == 'negative' or mention.get('urgency') == 'high':\n        response_queue.append({\n            'priority': 'urgent',\n            'mention': mention,\n            'response_needed': True,\n            'escalate': True\n        })\n    elif mention.get('sentiment') == 'positive':\n        response_queue.append({\n            'priority': 'normal',\n            'mention': mention,\n            'response_needed': True,\n            'escalate': False\n        })\n\nprint(json.dumps(response_queue))"
+            },
+            "output": "response_queue"
+        },
+        {
+            "type": "actions",
+            "name": "think",
+            "details": {
+                "text_input": "Create appropriate response drafts for each high-priority social media mention: {{ACTION_OUTPUT:response_queue}}. Make responses professional, empathetic, and brand-appropriate.",
+                "read_file_flag": "false",
+                "file_path": ""
+            },
+            "output": "response_drafts"
+        },
+        {
+            "type": "actions",
+            "name": "modify_file",
+            "details": {
+                "file_path": "/social_media/pending_responses.json",
+                "task": "replace entire content with {{ACTION_OUTPUT:response_drafts}}"
+            },
+            "output": "responses_saved"
+        },
+        {
+            "type": "actions",
+            "name": "notify_user",
+            "details": {
+                "user": "social_media_team",
+                "message": "Found {{ACTION_OUTPUT:response_queue.length}} social mentions requiring response. Check pending_responses.json for drafts.",
+                "method": "slack"
+            },
+            "output": "team_alerted"
+        }
+    ]
+},
+
+"Invoice Processing Workflow": {
+    "description": "Processes invoices, extracts data, updates accounting system, and sends payment reminders",
+    "category": "finance", 
+    "steps_count": 10,
+    "steps": [
+        {
+            "type": "triggers",
+            "name": "file_created_trigger",
+            "details": {
+                "file_path": "/invoices/incoming/"
+            },
+            "output": "new_invoice"
+        },
+        {
+            "type": "actions",
+            "name": "think",
+            "details": {
+                "text_input": "Extract invoice data including vendor, amount, due date, invoice number, and line items from this document.",
+                "read_file_flag": "true",
+                "file_path": "{{ACTION_OUTPUT:new_invoice}}"
+            },
+            "output": "invoice_data"
+        },
+        {
+            "type": "actions",
+            "name": "run_py_code",
+            "details": {
+                "code": "import json\nimport re\nfrom datetime import datetime, timedelta\n\n# Process extracted invoice data\ninvoice_info = {\n    'processed_date': datetime.now().isoformat(),\n    'status': 'pending_approval',\n    'payment_due': (datetime.now() + timedelta(days=30)).isoformat(),\n    'approval_required': True if float({{ACTION_OUTPUT:invoice_data}}.get('amount', 0)) > 1000 else False\n}\n\nprint(json.dumps(invoice_info))"
+            },
+            "output": "processed_invoice"
+        },
+        {
+            "type": "actions",
+            "name": "make_api_request",
+            "details": {
+                "url": "https://api.quickbooks.com/v3/company/invoices",
+                "method": "POST",
+                "headers": {"Authorization": "Bearer qb_token", "Content-Type": "application/json"},
+                "body": "{\"invoice_data\": {{ACTION_OUTPUT:invoice_data}}, \"status\": \"{{ACTION_OUTPUT:processed_invoice.status}}\"}"
+            },
+            "output": "accounting_updated"
+        },
+        {
+            "type": "actions",
+            "name": "run_py_code",
+            "details": {
+                "code": "import json\n\n# Check if approval is needed\nif {{ACTION_OUTPUT:processed_invoice}}.get('approval_required'):\n    approval_message = f\"Invoice requires approval: Amount ${{{ACTION_OUTPUT:invoice_data.amount}}} from {{{ACTION_OUTPUT:invoice_data.vendor}}}\"\n    approval_needed = True\nelse:\n    approval_message = \"Invoice auto-approved and processed\"\n    approval_needed = False\n\nresult = {\n    'approval_needed': approval_needed,\n    'message': approval_message\n}\n\nprint(json.dumps(result))"
+            },
+            "output": "approval_check"
+        },
+        {
+            "type": "actions",
+            "name": "notify_user",
+            "details": {
+                "user": "finance_manager",
+                "message": "{{ACTION_OUTPUT:approval_check.message}} - Invoice: {{ACTION_OUTPUT:invoice_data.invoice_number}}",
+                "method": "email"
+            },
+            "output": "approval_notification"
+        },
+        {
+            "type": "actions",
+            "name": "modify_file",
+            "details": {
+                "file_path": "/invoices/processed/invoice_log.json",
+                "task": "append {\"invoice\": {{ACTION_OUTPUT:invoice_data}}, \"processed\": {{ACTION_OUTPUT:processed_invoice}}, \"timestamp\": \"{{ACTION_OUTPUT:processed_invoice.processed_date}}\"}"
+            },
+            "output": "log_updated"
+        },
+        {
+            "type": "actions",
+            "name": "display_message",
+            "details": {
+                "message": "Invoice processing completed. {{ACTION_OUTPUT:approval_check.message}}"
+            },
+            "output": ""
+        }
+    ]
+},
+
+"Calendar Event Sync & Notification": {
+    "description": "Syncs events across calendars, sends smart reminders, and creates preparation tasks",
+    "category": "productivity",
+    "steps_count": 8,
+    "steps": [
+        {
+            "type": "triggers",
+            "name": "schedule_trigger",
+            "details": {
+                "frequency": "every_hour",
+                "time": "00:00"
+            },
+            "output": "calendar_sync_trigger"
+        },
+        {
+            "type": "actions",
+            "name": "make_api_request",
+            "details": {
+                "url": "https://www.googleapis.com/calendar/v3/calendars/primary/events",
+                "method": "GET",
+                "headers": {"Authorization": "Bearer google_calendar_token"},
+                "body": ""
+            },
+            "output": "google_events"
+        },
+        {
+            "type": "actions",
+            "name": "think",
+            "details": {
+                "text_input": "Analyze upcoming calendar events: {{ACTION_OUTPUT:google_events}}. Identify meetings that need preparation, travel time, or special arrangements. Create smart reminders and preparation tasks.",
+                "read_file_flag": "false",
+                "file_path": ""
+            },
+            "output": "event_analysis"
+        },
+        {
+            "type": "actions",
+            "name": "run_py_code",
+            "details": {
+                "code": "import json\nfrom datetime import datetime, timedelta\n\n# Process events and create smart notifications\nsmart_reminders = []\nfor event in {{ACTION_OUTPUT:event_analysis}}:\n    event_time = datetime.fromisoformat(event.get('start_time', ''))\n    \n    # Create different reminder types based on event\n    if 'meeting' in event.get('title', '').lower():\n        smart_reminders.append({\n            'type': 'preparation',\n            'message': f\"Prepare for meeting: {event.get('title')}\",\n            'remind_at': (event_time - timedelta(hours=2)).isoformat(),\n            'event_id': event.get('id')\n        })\n    \n    if event.get('location'):\n        smart_reminders.append({\n            'type': 'travel',\n            'message': f\"Leave for {event.get('title')} at {event.get('location')}\",\n            'remind_at': (event_time - timedelta(minutes=30)).isoformat(),\n            'event_id': event.get('id')\n        })\n\nprint(json.dumps(smart_reminders))"
+            },
+            "output": "smart_reminders"
+        },
+        {
+            "type": "actions",
+            "name": "make_api_request",
+            "details": {
+                "url": "https://outlook.office.com/api/v2.0/me/events",
+                "method": "POST",
+                "headers": {"Authorization": "Bearer outlook_token", "Content-Type": "application/json"},
+                "body": "{\"events\": {{ACTION_OUTPUT:google_events}}}"
+            },
+            "output": "outlook_sync"
+        },
+        {
+            "type": "actions",
+            "name": "modify_file",
+            "details": {
+                "file_path": "/calendar/reminders_queue.json",
+                "task": "replace entire content with {{ACTION_OUTPUT:smart_reminders}}"
+            },
+            "output": "reminders_saved"
+        },
+        {
+            "type": "actions",
+            "name": "notify_user",
+            "details": {
+                "user": "calendar_owner",
+                "message": "Calendar sync completed. {{ACTION_OUTPUT:smart_reminders.length}} smart reminders scheduled.",
+                "method": "push_notification"
+            },
+            "output": "sync_notification"
+        }
+    ]
+},
+
+"E-commerce Order Processing": {
+    "description": "Processes new orders, updates inventory, sends confirmations, and creates shipping labels",
+    "category": "ecommerce",
+    "steps_count": 11,
+    "steps": [
+        {
+            "type": "triggers",
+            "name": "file_created_trigger",
+            "details": {
+                "file_path": "/orders/new/"
+            },
+            "output": "new_order"
+        },
+        {
+            "type": "actions",
+            "name": "think",
+            "details": {
+                "text_input": "Process this e-commerce order and extract customer info, items, quantities, shipping details, and payment status.",
+                "read_file_flag": "true",
+                "file_path": "{{ACTION_OUTPUT:new_order}}"
+            },
+            "output": "order_details"
+        },
+        {
+            "type": "actions",
+            "name": "run_py_code",
+            "details": {
+                "code": "import json\nfrom datetime import datetime\n\n# Process order and check inventory\norder_processing = {\n    'order_id': {{ACTION_OUTPUT:order_details}}.get('order_id'),\n    'processed_at': datetime.now().isoformat(),\n    'status': 'processing',\n    'estimated_ship_date': (datetime.now() + timedelta(days=2)).isoformat(),\n    'tracking_number': f\"TRK{datetime.now().strftime('%Y%m%d%H%M%S')}\"\n}\n\n# Check inventory for each item\ninventory_updates = []\nfor item in {{ACTION_OUTPUT:order_details}}.get('items', []):\n    inventory_updates.append({\n        'sku': item.get('sku'),\n        'quantity_ordered': item.get('quantity'),\n        'action': 'reduce_stock'\n    })\n\nprint(json.dumps({'processing': order_processing, 'inventory': inventory_updates}))"
+            },
+            "output": "order_processing"
+        },
+        {
+            "type": "actions",
+            "name": "make_api_request",
+            "details": {
+                "url": "https://api.shopify.com/admin/api/inventory_levels.json",
+                "method": "PUT",
+                "headers": {"X-Shopify-Access-Token": "shopify_token", "Content-Type": "application/json"},
+                "body": "{\"inventory_updates\": {{ACTION_OUTPUT:order_processing.inventory}}}"
+            },
+            "output": "inventory_updated"
+        },
+        {
+            "type": "actions",
+            "name": "think",
+            "details": {
+                "text_input": "Create a professional order confirmation email for this customer: {{ACTION_OUTPUT:order_details}}. Include order summary, tracking info, and estimated delivery.",
+                "read_file_flag": "false",
+                "file_path": ""
+            },
+            "output": "confirmation_email"
+        },
+        {
+            "type": "actions",
+            "name": "make_api_request",
+            "details": {
+                "url": "https://api.sendgrid.com/v3/mail/send",
+                "method": "POST",
+                "headers": {"Authorization": "Bearer sendgrid_key", "Content-Type": "application/json"},
+                "body": "{\"personalizations\": [{\"to\": [{{ACTION_OUTPUT:order_details.customer_email}}]}], \"from\": {\"email\": \"orders@store.com\"}, \"subject\": \"Order Confirmation #{{ACTION_OUTPUT:order_details.order_id}}\", \"content\": [{\"type\": \"text/html\", \"value\": \"{{ACTION_OUTPUT:confirmation_email}}\"}]}"
+            },
+            "output": "email_sent"
+        },
+        {
+            "type": "actions",
+            "name": "make_api_request",
+            "details": {
+                "url": "https://api.shipstation.com/orders",
+                "method": "POST",
+                "headers": {"Authorization": "Basic shipstation_auth", "Content-Type": "application/json"},
+                "body": "{\"orderNumber\": \"{{ACTION_OUTPUT:order_details.order_id}}\", \"orderDate\": \"{{ACTION_OUTPUT:order_processing.processing.processed_at}}\", \"shipTo\": {{ACTION_OUTPUT:order_details.shipping_address}}, \"items\": {{ACTION_OUTPUT:order_details.items}}}"
+            },
+            "output": "shipping_created"
+        },
+        {
+            "type": "actions",
+            "name": "modify_file",
+            "details": {
+                "file_path": "/orders/processed/order_log.json",
+                "task": "append {\"order\": {{ACTION_OUTPUT:order_details}}, \"processing\": {{ACTION_OUTPUT:order_processing}}, \"shipped\": {{ACTION_OUTPUT:shipping_created}}}"
+            },
+            "output": "order_logged"
+        },
+        {
+            "type": "actions",
+            "name": "notify_user",
+            "details": {
+                "user": "fulfillment_team",
+                "message": "New order processed: #{{ACTION_OUTPUT:order_details.order_id}} - ${{ACTION_OUTPUT:order_details.total}}. Shipping label created.",
+                "method": "slack"
+            },
+            "output": "team_notified"
+        },
+        {
+            "type": "actions",
+            "name": "display_message",
+            "details": {
+                "message": "Order #{{ACTION_OUTPUT:order_details.order_id}} successfully processed and queued for shipping."
+            },
+            "output": ""
+        }
+    ]
+},
+
+"Survey Response Analyzer": {
+    "description": "Processes survey responses, analyzes feedback, generates insights, and creates action items",
+    "category": "analytics",
+    "steps_count": 9,
+    "steps": [
+        {
+            "type": "triggers",
+            "name": "file_created_trigger",
+            "details": {
+                "file_path": "/surveys/responses/"
+            },
+            "output": "survey_responses"
+        },
+        {
+            "type": "actions",
+            "name": "run_py_code", 
+            "details": {
+                "code": "import pandas as pd\nimport json\nfrom collections import Counter\n\n# Load and analyze survey data\ndf = pd.read_csv('{{ACTION_OUTPUT:survey_responses}}')\n\n# Basic analysis\nanalysis = {\n    'total_responses': len(df),\n    'response_rate': 85.5,  # Would calculate from actual data\n    'avg_satisfaction': df.get('satisfaction', pd.Series([0])).mean() if 'satisfaction' in df.columns else 0,\n    'completion_rate': (len(df) / len(df)) * 100,  # Simplified\n    'top_issues': [],\n    'demographics': {}\n}\n\n# Analyze text responses for common themes\nif 'feedback' in df.columns:\n    feedback_words = ' '.join(df['feedback'].fillna('').astype(str)).lower().split()\n    common_words = Counter(feedback_words).most_common(10)\n    analysis['common_themes'] = [word for word, count in common_words if len(word) > 3]\n\nprint(json.dumps(analysis))"
+            },
+            "output": "survey_analysis"
+        },
+        {
+            "type": "actions",
+            "name": "think",
+            "details": {
+                "text_input": "Analyze survey results: {{ACTION_OUTPUT:survey_analysis}} and the raw data. Identify key insights, trends, areas for improvement, and actionable recommendations.",
+                "read_file_flag": "true",
+                "file_path": "{{ACTION_OUTPUT:survey_responses}}"
+            },
+            "output": "insights_report"
+        },
+        {
+            "type": "actions",
+            "name": "run_py_code",
+            "details": {
+                "code": "import matplotlib.pyplot as plt\nimport seaborn as sns\nimport json\n\n# Create visualizations\nplt.figure(figsize=(12, 8))\n\n# Satisfaction distribution\nplt.subplot(2, 2, 1)\nsatisfaction_data = [4.2, 3.8, 4.5, 3.9, 4.1]  # Sample data\nplt.bar(range(len(satisfaction_data)), satisfaction_data)\nplt.title('Satisfaction by Category')\nplt.ylabel('Average Rating')\n\n# Response trends\nplt.subplot(2, 2, 2)\ntrend_data = [45, 52, 48, 61, 58]  # Sample monthly responses\nplt.plot(range(len(trend_data)), trend_data, marker='o')\nplt.title('Response Trends')\nplt.ylabel('Number of Responses')\n\nplt.tight_layout()\nplt.savefig('/surveys/analysis/survey_charts.png', dpi=300, bbox_inches='tight')\n\nvisualization_info = {\n    'charts_created': True,\n    'chart_path': '/surveys/analysis/survey_charts.png',\n    'chart_types': ['satisfaction_distribution', 'response_trends']\n}\n\nprint(json.dumps(visualization_info))"
+            },
+            "output": "survey_charts"
+        },
+        {
+            "type": "actions",
+            "name": "think",
+            "details": {
+                "text_input": "Create a comprehensive survey analysis report in HTML format including: executive summary, key findings, visualizations, recommendations, and action items. Use the analysis: {{ACTION_OUTPUT:insights_report}} and charts: {{ACTION_OUTPUT:survey_charts}}",
+                "read_file_flag": "false",
+                "file_path": ""
+            },
+            "output": "html_report"
+        },
+        {
+            "type": "actions",
+            "name": "modify_file",
+            "details": {
+                "file_path": "/surveys/reports/survey_analysis_report.html",
+                "task": "replace entire content with {{ACTION_OUTPUT:html_report}}"
+            },
+            "output": "report_saved"
+        },
+        {
+            "type": "actions",
+            "name": "run_py_code",
+            "details": {
+                "code": "import json\nfrom datetime import datetime, timedelta\n\n# Generate action items based on survey insights\naction_items = [\n    {\n        'title': 'Address customer service response time',\n        'priority': 'high',\n        'assigned_to': 'customer_service_manager',\n        'due_date': (datetime.now() + timedelta(days=14)).isoformat(),\n        'description': 'Improve response time based on survey feedback'\n    },\n    {\n        'title': 'Update product documentation',\n        'priority': 'medium',\n        'assigned_to': 'product_team',\n        'due_date': (datetime.now() + timedelta(days=30)).isoformat(),\n        'description': 'Address confusion mentioned in survey responses'\n    }\n]\n\nprint(json.dumps(action_items))"
+            },
+            "output": "action_items"
+        },
+        {
+            "type": "actions",
+            "name": "make_api_request",
+            "details": {
+                "url": "https://api.trello.com/1/cards",
+                "method": "POST",
+                "headers": {"Authorization": "OAuth trello_token", "Content-Type": "application/json"},
+                "body": "{\"name\": \"Survey Action Items\", \"desc\": \"{{ACTION_OUTPUT:action_items}}\", \"idList\": \"trello_board_id\"}"
+            },
+            "output": "trello_cards_created"
+        },
+        {
+            "type": "actions",
+            "name": "notify_user",
+            "details": {
+                "user": "product_manager",
+                "message": "Survey analysis completed. {{ACTION_OUTPUT:survey_analysis.total_responses}} responses analyzed. Report available at /surveys/reports/. {{ACTION_OUTPUT:action_items.length}} action items created.",
+                "method": "email"
+            },
+            "output": "analysis_notification"
+        }
+    ]
+}
 }
 
 @app.route('/', methods=['GET'])
